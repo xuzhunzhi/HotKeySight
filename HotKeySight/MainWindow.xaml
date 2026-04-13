@@ -1,19 +1,59 @@
-<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="HotKeySight.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:HotKeySight"
+    xmlns:pages="using:HotKeySight.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="HotKeySight">
+    Title="HotKeySight"
+    Width="1000"
+    Height="700"
+    MinWidth="800"
+    MinHeight="600"
+    WindowStartupLocation="CenterScreen">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid>
+    <NavigationView
+        x:Name="NavView"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="False"
+        PaneDisplayMode="Left"
+        OpenPaneLength="200">
 
-    </Grid>
+        <NavigationView.MenuItems>
+            <NavigationViewItem
+                Content="按应用查看"
+                Tag="ByApp"
+                Icon="AllApps">
+                <NavigationViewItem.KeyboardAccelerator>
+                    <KeyboardAccelerator Key="D1" Modifiers="Control" />
+                </NavigationViewItem.KeyboardAccelerator>
+            </NavigationViewItem>
+
+            <NavigationViewItem
+                Content="热键检测"
+                Tag="ByHotKey"
+                Icon="Keyboard">
+                <NavigationViewItem.KeyboardAccelerator>
+                    <KeyboardAccelerator Key="D2" Modifiers="Control" />
+                </NavigationViewItem.KeyboardAccelerator>
+            </NavigationViewItem>
+
+            <NavigationViewItem
+                Content="热键冲突"
+                Tag="Conflicts"
+                Icon="Warning">
+                <NavigationViewItem.KeyboardAccelerator>
+                    <KeyboardAccelerator Key="D3" Modifiers="Control" />
+                </NavigationViewItem.KeyboardAccelerator>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="ContentFrame" />
+    </NavigationView>
 </Window>
