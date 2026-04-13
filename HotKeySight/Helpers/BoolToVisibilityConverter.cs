@@ -1,4 +1,3 @@
-using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 
@@ -6,7 +5,7 @@ namespace HotKeySight.Helpers
 {
     public class BoolToVisibilityConverter : IValueConverter
     {
-        public object Convert(object value, Type targetType, object parameter, string language)
+        public object Convert(object value, System.Type targetType, object parameter, string language)
         {
             if (value is bool boolValue && boolValue)
             {
@@ -15,7 +14,7 @@ namespace HotKeySight.Helpers
             return Visibility.Collapsed;
         }
 
-        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        public object ConvertBack(object value, System.Type targetType, object parameter, string language)
         {
             if (value is Visibility visibility && visibility == Visibility.Visible)
             {
