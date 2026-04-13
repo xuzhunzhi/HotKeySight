@@ -138,8 +138,11 @@
                     Grid.Row="2"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
-                    Visibility="Collapsed">
-                    <SymbolIcon Symbol="AllApps" FontSize="48" />
+                    Visibility="Visible">
+                    <TextBlock
+                        Text="📋"
+                        FontSize="48"
+                        HorizontalAlignment="Center" />
                     <TextBlock
                         Text="从左侧选择一个应用"
                         FontSize="16"

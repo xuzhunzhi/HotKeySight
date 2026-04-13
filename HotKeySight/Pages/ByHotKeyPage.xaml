@@ -128,7 +128,10 @@
                     Grid.Row="1"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center">
-                    <SymbolIcon Symbol="Keyboard" FontSize="48" />
+                    <TextBlock
+                        Text="⌨️"
+                        FontSize="48"
+                        HorizontalAlignment="Center" />
                     <TextBlock
                         Text="按下热键后结果会显示在这里"
                         FontSize="14"

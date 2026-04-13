@@ -8,52 +8,34 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Title="HotKeySight"
-    Width="1000"
-    Height="700"
-    MinWidth="800"
-    MinHeight="600"
-    WindowStartupLocation="CenterScreen">
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdrop="Mica">
 
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
+    <Grid>
+        <NavigationView
+            x:Name="NavView"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            PaneDisplayMode="Left"
+            OpenPaneLength="200"
+            SelectionChanged="NavView_SelectionChanged">
 
-    <NavigationView
-        x:Name="NavView"
-        IsBackButtonVisible="Collapsed"
-        IsSettingsVisible="False"
-        PaneDisplayMode="Left"
-        OpenPaneLength="200">
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    Content="按应用查看"
+                    Tag="ByApp"
+                    Icon="AllApps" />
+                <NavigationViewItem
+                    Content="热键检测"
+                    Tag="ByHotKey"
+                    Icon="Keyboard" />
+                <NavigationViewItem
+                    Content="热键冲突"
+                    Tag="Conflicts"
+                    Icon="Warning" />
+            </NavigationView.MenuItems>
 
-        <NavigationView.MenuItems>
-            <NavigationViewItem
-                Content="按应用查看"
-                Tag="ByApp"
-                Icon="AllApps">
-                <NavigationViewItem.KeyboardAccelerator>
-                    <KeyboardAccelerator Key="D1" Modifiers="Control" />
-                </NavigationViewItem.KeyboardAccelerator>
-            </NavigationViewItem>
-
-            <NavigationViewItem
-                Content="热键检测"
-                Tag="ByHotKey"
-                Icon="Keyboard">
-                <NavigationViewItem.KeyboardAccelerator>
-                    <KeyboardAccelerator Key="D2" Modifiers="Control" />
-                </NavigationViewItem.KeyboardAccelerator>
-            </NavigationViewItem>
-
-            <NavigationViewItem
-                Content="热键冲突"
-                Tag="Conflicts"
-                Icon="Warning">
-                <NavigationViewItem.KeyboardAccelerator>
-                    <KeyboardAccelerator Key="D3" Modifiers="Control" />
-                </NavigationViewItem.KeyboardAccelerator>
-            </NavigationViewItem>
-        </NavigationView.MenuItems>
-
-        <Frame x:Name="ContentFrame" />
-    </NavigationView>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
 </Window>

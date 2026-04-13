@@ -10,10 +10,8 @@ namespace HotKeySight
         public MainWindow()
         {
             InitializeComponent();
-            NavView.SelectionChanged += NavView_SelectionChanged;
             ContentFrame.Navigate(typeof(ByAppPage));
 
-            // Select first item by default
             if (NavView.MenuItems.Count > 0)
             {
                 NavView.SelectedItem = NavView.MenuItems[0];
