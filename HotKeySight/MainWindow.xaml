@@ -31,7 +31,7 @@
                 <NavigationViewItem
                     Content="热键冲突"
                     Tag="Conflicts"
-                    Icon="Warning" />
+                    Icon="Flag" />
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame" />
