@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HotKeySight (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "HotKeySight (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

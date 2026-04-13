@@ -1,0 +1,29 @@
+# Build results
+bin/
+obj/
+out/
+
+# VS/Debug
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# MSBuild
+*.log
+*.bin
+*.dll
+*.exe
+
+# OS
+Thumbs.db
+[Dd]esktop.ini
