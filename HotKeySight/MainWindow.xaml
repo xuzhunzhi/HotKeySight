@@ -14,7 +14,7 @@
         <NavigationView
             x:Name="NavView"
             IsBackButtonVisible="Collapsed"
-            IsSettingsVisible="False"
+            IsSettingsVisible="True"
             PaneDisplayMode="Left"
             OpenPaneLength="200"
             SelectionChanged="NavView_SelectionChanged">
@@ -33,6 +33,13 @@
                     Tag="Conflicts"
                     Icon="Flag" />
             </NavigationView.MenuItems>
+
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem
+                    Content="切换主题"
+                    Tag="Settings"
+                    Icon="Setting" />
+            </NavigationView.FooterMenuItems>
 
             <Frame x:Name="ContentFrame" />
         </NavigationView>

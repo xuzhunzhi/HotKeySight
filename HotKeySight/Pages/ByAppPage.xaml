@@ -17,7 +17,7 @@
         <!-- 左侧：应用列表 -->
         <Border
             Grid.Column="0"
-            Background="{ThemeResource CardFillColorDefaultBrush}"
+            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
             CornerRadius="8"
             Padding="12"
             Margin="0,0,12,0">
@@ -66,7 +66,7 @@
         <!-- 右侧：选中应用的热键列表 -->
         <Border
             Grid.Column="1"
-            Background="{ThemeResource CardFillColorDefaultBrush}"
+            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
             CornerRadius="8"
             Padding="16">
             <Grid>
@@ -99,7 +99,7 @@
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <Border
-                                Background="{ThemeResource CardFillColorSecondaryBrush}"
+                                Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
                                 CornerRadius="6"
                                 Padding="12,10"
                                 Margin="0,0,0,8">
