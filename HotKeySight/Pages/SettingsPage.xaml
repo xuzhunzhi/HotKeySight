@@ -1,0 +1,163 @@
+<Page
+    x:Class="HotKeySight.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:HotKeySight.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DesignHeight="600"
+    d:DesignWidth="800">
+
+    <Grid Margin="24">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 页面标题 -->
+        <TextBlock
+            Grid.Row="0"
+            Text="设置"
+            FontSize="28"
+            FontWeight="SemiBold"
+            Margin="0,0,0,24" />
+
+        <!-- 设置内容 -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- 外观设置组 -->
+                <TextBlock
+                    Text="外观"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="0,0,0,8" />
+
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,24"
+                    HorizontalAlignment="Stretch">
+                    <StackPanel>
+
+                        <!-- 深色模式 -->
+                        <Grid Padding="16,12" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon
+                                Grid.Column="0"
+                                FontFamily="Segoe MDL2 Assets"
+                                Glyph="&#xE708;"
+                                Margin="0,0,16,0" />
+
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center">
+                                <TextBlock
+                                    Text="深色模式"
+                                    FontSize="14" />
+                                <TextBlock
+                                    Text="切换应用程序的配色方案"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,2,0,0" />
+                            </StackPanel>
+
+                            <ToggleSwitch
+                                x:Name="ThemeToggle"
+                                Grid.Column="2"
+                                IsOn="False"
+                                Toggled="ThemeToggle_Toggled"
+                                VerticalAlignment="Center" />
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- 关于组 -->
+                <TextBlock
+                    Text="关于"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="0,0,0,8" />
+
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,24"
+                    HorizontalAlignment="Stretch">
+                    <StackPanel>
+
+                        <!-- 应用信息 -->
+                        <Grid Padding="16,12" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon
+                                Grid.Column="0"
+                                FontFamily="Segoe MDL2 Assets"
+                                Glyph="&#xE946;"
+                                Margin="0,0,16,0" />
+
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center">
+                                <TextBlock
+                                    Text="HotKeySight"
+                                    FontSize="14" />
+                                <TextBlock
+                                    Text="版本 1.0.0"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border
+                            Height="1"
+                            Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Margin="56,0,16,0" />
+
+                        <!-- 描述 -->
+                        <Grid Padding="16,12" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon
+                                Grid.Column="0"
+                                FontFamily="Segoe MDL2 Assets"
+                                Glyph="&#xE92D;"
+                                Margin="0,0,16,0" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="热键检测与冲突分析工具"
+                                FontSize="14"
+                                VerticalAlignment="Center"
+                                TextWrapping="Wrap" />
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+    </Grid>
+</Page>
