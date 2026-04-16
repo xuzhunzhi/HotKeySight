@@ -8,34 +8,54 @@ namespace HotKeySight.Pages
         public SettingsPage()
         {
             InitializeComponent();
-
-            // 同步当前主题状态到 ToggleSwitch
             Loaded += OnLoaded;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            if (Window.Current?.Content is FrameworkElement rootElement)
+            // 同步当前主题到 ComboBox
+            SyncThemeComboBox();
+        }
+
+        private void SyncThemeComboBox()
+        {
+            if (MainWindow.Instance is MainWindow mainWindow)
             {
-                ThemeToggle.IsOn = rootElement.RequestedTheme == ElementTheme.Dark;
+                var currentTheme = mainWindow.GetCurrentTheme();
+                string themeTag = currentTheme switch
+                {
+                    ElementTheme.Light => "Light",
+                    ElementTheme.Dark => "Dark",
+                    _ => "System"
+                };
+
+                foreach (ComboBoxItem item in ThemeComboBox.Items)
+                {
+                    if (item.Tag?.ToString() == themeTag)
+                    {
+                        ThemeComboBox.SelectedItem = item;
+                        return;
+                    }
+                }
             }
         }
 
-        private void ThemeToggle_Toggled(object sender, RoutedEventArgs e)
+        private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            // 设置主窗口的主题
-            if (Window.Current?.Content is FrameworkElement rootElement)
+            if (ThemeComboBox.SelectedItem is ComboBoxItem item)
             {
-                var newTheme = ThemeToggle.IsOn
-                    ? ElementTheme.Dark
-                    : ElementTheme.Light;
+                var tag = item.Tag?.ToString() ?? "System";
 
-                rootElement.RequestedTheme = newTheme;
-
-                // 更新标题栏颜色
-                if (Window.Current is MainWindow mainWindow)
+                if (MainWindow.Instance is MainWindow mainWindow)
                 {
-                    mainWindow.UpdateTitleBarTheme(newTheme);
+                    ElementTheme theme = tag switch
+                    {
+                        "Light" => ElementTheme.Light,
+                        "Dark" => ElementTheme.Dark,
+                        _ => ElementTheme.Default
+                    };
+
+                    mainWindow.SetTheme(theme);
                 }
             }
         }

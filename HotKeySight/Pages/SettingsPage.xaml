@@ -63,21 +63,24 @@
                                 Grid.Column="1"
                                 VerticalAlignment="Center">
                                 <TextBlock
-                                    Text="深色模式"
+                                    Text="主题"
                                     FontSize="14" />
                                 <TextBlock
-                                    Text="切换应用程序的配色方案"
+                                    Text="选择应用程序的配色方案"
                                     FontSize="12"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     Margin="0,2,0,0" />
                             </StackPanel>
 
-                            <ToggleSwitch
-                                x:Name="ThemeToggle"
+                            <ComboBox
+                                x:Name="ThemeComboBox"
                                 Grid.Column="2"
-                                IsOn="False"
-                                Toggled="ThemeToggle_Toggled"
-                                VerticalAlignment="Center" />
+                                VerticalAlignment="Center"
+                                SelectionChanged="ThemeComboBox_SelectionChanged">
+                                <ComboBoxItem Content="浅色" Tag="Light" />
+                                <ComboBoxItem Content="深色" Tag="Dark" />
+                                <ComboBoxItem Content="跟随系统" Tag="System" />
+                            </ComboBox>
                         </Grid>
 
                     </StackPanel>
