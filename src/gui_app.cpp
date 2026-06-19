@@ -797,7 +797,8 @@ components::theme::ThemeColorTokens themeTokens() { Palette p = palette(); retur
 // ============================================================
 void label(eui::Ui& ui, const std::string& id, float x, float y, float w, float h,
            const std::string& text, float fs, eui::Color c, eui::HorizontalAlign ha = eui::HorizontalAlign::Left) {
-    ui.text(id).x(x).y(y).size(w,h).text(text).fontSize(fs).lineHeight(h).color(c).horizontalAlign(ha).verticalAlign(eui::VerticalAlign::Center).build();
+    float lh = fs * 1.35f; // proper Chinese line height
+    ui.text(id).x(x).y(y).size(w,h).text(text).fontSize(fs).lineHeight(lh).color(c).horizontalAlign(ha).verticalAlign(eui::VerticalAlign::Center).build();
 }
 void panel(eui::Ui& ui, const std::string& id, float x, float y, float w, float h, float r, eui::Color fill, eui::Color border = {0,0,0,0}, eui::Shadow shadow = {}) {
     auto b = ui.rect(id).x(x).y(y).size(w,h).color(fill).radius(r);
