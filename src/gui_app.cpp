@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <tlhelp32.h>
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -84,6 +85,8 @@ struct AppState {
     float customRgbDark[3] = {0.0f,0.471f,0.831f};
     float customRgbLight[3] = {0.0f,0.471f,0.831f};
     bool colorPickerOpen = false;
+    std::string processDetectStatus;
+    bool processDetecting = false;
     std::map<std::string, std::set<std::string>> hotkeyConflicts; // combo -> {processes}
 };
 static AppState state;
@@ -254,6 +257,8 @@ static std::map<std::string, std::string> g_friendlyNames = {
     {"FlowLauncher.exe", "FlowLauncher"},
     {"Keyviz.exe", "Keyviz"},
     {"Carnac.exe", "Carnac"},
+    {"Snipaste.exe", "Snipaste"},
+    {"snipaste.exe", "Snipaste"},
 };
 
 static std::string GetProcessName(DWORD pid) {
@@ -425,6 +430,19 @@ void FinishScan() {
         {0, 0xAD, "静音"}, {0, 0xAE, "音量-"}, {0, 0xAF, "音量+"},
         {0, 0xB0, "下一首"}, {0, 0xB1, "上一首"}, {0, 0xB2, "停止"}, {0, 0xB3, "播放/暂停"},
         {0, 0xB4, "邮件"}, {0, 0xB5, "媒体选择"}, {0, 0xB6, "计算器"}, {0, 0xB7, "浏览器"},
+        // Well-known third-party app hotkeys (may use keyboard hooks, not RegisterHotKey)
+        // Snipaste
+        {0, 0x70, "Snipaste: F1 (截图)"},
+        {0, 0x72, "Snipaste: F3 (贴图)"},
+        // QQ / WeChat
+        {MOD_CONTROL|MOD_ALT, 0x41, "QQ/微信: Ctrl+Alt+A (截图)"},
+        {MOD_CONTROL|MOD_ALT, 0x57, "微信: Ctrl+Alt+W (显示)"},
+        {MOD_CONTROL|MOD_ALT, 0x5A, "QQ: Ctrl+Alt+Z (显示)"},
+        {MOD_CONTROL|MOD_ALT, 0x58, "QQ: Ctrl+Alt+X (提取文字)"},
+        // Other tools
+        {MOD_CONTROL|MOD_SHIFT, 0x45, "Everything: Ctrl+Shift+E (搜索)"},
+        {MOD_ALT, 0x20, "PowerToys Run: Alt+Space (启动器)"},
+        {0, 0x2C, "截图工具: PrintScreen"},
     };
     std::vector<OccupiedHotkey> builtinHk;
     for (auto& ws : winBuiltin) {
@@ -972,6 +990,131 @@ static void LoadTheme() {
     fclose(f);
 }
 
+// DLL injection engine — inject hook_dll into target process via CreateRemoteThread
+static HANDLE g_injectPipe = INVALID_HANDLE_VALUE;
+static std::thread g_injectThread;
+static volatile bool g_injectRunning = false;
+
+static void InjectDll(DWORD pid) {
+    char dllPath[512];
+    wchar_t exePath[MAX_PATH]; GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+    if (lastSlash) *(lastSlash + 1) = 0;
+    wcscat(exePath, L"hook_dll.dll");
+    WideCharToMultiByte(CP_UTF8, 0, exePath, -1, dllPath, 512, nullptr, nullptr);
+
+    HANDLE hProc = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, pid);
+    if (!hProc) return;
+
+    size_t pathLen = strlen(dllPath) + 1;
+    void* remoteMem = VirtualAllocEx(hProc, nullptr, pathLen, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!remoteMem) { CloseHandle(hProc); return; }
+
+    WriteProcessMemory(hProc, remoteMem, dllPath, pathLen, nullptr);
+    HANDLE hThread = CreateRemoteThread(hProc, nullptr, 0,
+        (LPTHREAD_START_ROUTINE)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA"),
+        remoteMem, 0, nullptr);
+    if (hThread) {
+        WaitForSingleObject(hThread, 5000);
+        CloseHandle(hThread);
+    }
+    VirtualFreeEx(hProc, remoteMem, 0, MEM_RELEASE);
+    CloseHandle(hProc);
+}
+
+struct PipeHotkeyMsg { DWORD pid, tid; UINT modifiers, vk; int id; char name[64]; };
+
+static void InjectPipeServer() {
+    while (g_injectRunning) {
+        HANDLE hPipe = CreateNamedPipeA("\\\\.\\pipe\\HotKeySightPipe",
+            PIPE_ACCESS_INBOUND, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+            4, sizeof(PipeHotkeyMsg), sizeof(PipeHotkeyMsg), 100, nullptr);
+        if (hPipe == INVALID_HANDLE_VALUE) { Sleep(500); continue; }
+        if (ConnectNamedPipe(hPipe, nullptr) || GetLastError() == ERROR_PIPE_CONNECTED) {
+            PipeHotkeyMsg msg;
+            DWORD read;
+            while (ReadFile(hPipe, &msg, sizeof(msg), &read, nullptr) && read == sizeof(msg)) {
+                std::string procName = msg.name;
+                std::string combo = ComboStr(msg.modifiers, msg.vk);
+                TrackConflict(procName, combo);
+                {
+                    std::lock_guard<std::mutex> lock(stateMutex);
+                    MonitorEvent ev;
+                    time_t tnow = time(nullptr); char tb[16]; strftime(tb, 16, "%H:%M:%S", localtime(&tnow));
+                    ev.time = tb; ev.combo = combo; ev.process = procName + " [已确认]";
+                    state.events.push_back(ev);
+                    if ((int)state.events.size() > state.eventLogLimit) state.events.erase(state.events.begin());
+                    state.processHotkeys[procName].insert(combo);
+                }
+            }
+        }
+        CloseHandle(hPipe);
+    }
+}
+
+static void StartInjectPipe() {
+    if (g_injectRunning) return;
+    g_injectRunning = true;
+    g_injectThread = std::thread(InjectPipeServer);
+}
+
+static void StopInjectPipe() {
+    g_injectRunning = false;
+    if (g_injectThread.joinable()) g_injectThread.join();
+}
+
+// Suspend-and-rescan: find which process owns a hotkey
+static std::string DetectProcessOwner(const std::string& procName, UINT testMod, UINT testVk) {
+    // 1. Find process PIDs
+    std::vector<DWORD> pids;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return "无法创建进程快照";
+    PROCESSENTRY32W pe = {sizeof(pe)};
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            std::string name = WsToUtf8(pe.szExeFile);
+            if (name == procName) pids.push_back(pe.th32ProcessID);
+        } while (Process32NextW(snap, &pe));
+    }
+    CloseHandle(snap);
+    if (pids.empty()) return "未找到进程: " + procName;
+
+    // 2. Check if the hotkey is currently occupied
+    if (!g_hiddenWnd) CreateHiddenWindow();
+    if (!g_hiddenWnd) return "无扫描窗口";
+    bool wasOccupied = !RegisterHotKey(g_hiddenWnd, 0x4000, testMod | MOD_NOREPEAT, testVk);
+    if (!wasOccupied) { UnregisterHotKey(g_hiddenWnd, 0x4000); return "该热键当前未被占用"; }
+
+    // 3. Suspend all threads of all matching processes
+    struct Suspended { HANDLE hThread; DWORD tid; };
+    std::vector<Suspended> suspended;
+    for (DWORD pid : pids) {
+        HANDLE thSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (thSnap == INVALID_HANDLE_VALUE) continue;
+        THREADENTRY32 te = {sizeof(te)};
+        if (Thread32First(thSnap, &te)) {
+            do {
+                if (te.th32OwnerProcessID == pid && te.th32ThreadID != GetCurrentThreadId()) {
+                    HANDLE hTh = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+                    if (hTh) { SuspendThread(hTh); suspended.push_back({hTh, te.th32ThreadID}); }
+                }
+            } while (Thread32Next(thSnap, &te));
+        }
+        CloseHandle(thSnap);
+    }
+
+    // 4. Re-scan the hotkey
+    Sleep(50);
+    bool stillOccupied = !RegisterHotKey(g_hiddenWnd, 0x4001, testMod | MOD_NOREPEAT, testVk);
+    if (stillOccupied) UnregisterHotKey(g_hiddenWnd, 0x4001);
+
+    // 5. Resume all threads
+    for (auto& s : suspended) { ResumeThread(s.hThread); CloseHandle(s.hThread); }
+
+    if (!stillOccupied) return "确认为 " + procName + " 占用";
+    return procName + " 未占用该热键 (暂停后仍被占用)";
+}
+
 void compose(eui::Ui& ui, const eui::Screen& screen) {
     static bool firstFrame = true;
     // Single-instance check via named mutex
@@ -1276,9 +1419,8 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             label(ui,"rs.title",ctnX+20,ciy+4,cxW-40,32,"进程 → 热键汇总",22.0f,p.text);
             float yy=ciy+42;
             if(state.processHotkeys.empty()){
-                label(ui,"rs.empty",ctnX+20,yy+40,cxW-40,60,"暂无数据。\n开始监控并按下热键后，检测到的进程→热键映射会出现在这里。\n如果同一快捷键被多个进程使用，会标记 ⚠ 冲突。",17.0f,p.muted,eui::HorizontalAlign::Center);
+                label(ui,"rs.empty",ctnX+20,yy+40,cxW-40,60,"暂无数据。\n开始监控并按下热键后，检测到的进程→热键映射会出现在这里。",17.0f,p.muted,eui::HorizontalAlign::Center);
             }else{
-                // Show conflict summary first
                 if(!state.hotkeyConflicts.empty()){
                     label(ui,"rs.conflict.title",ctnX+20,yy,cxW-40,26,"⚠ 检测到的热键冲突",18.0f,{0.95f,0.75f,0.18f,1.0f}); yy+=30;
                     for(auto& kv2:state.hotkeyConflicts){
@@ -1291,11 +1433,68 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                     yy+=10;
                 }
                 for(auto& kv:state.processHotkeys){
-                    if(yy>cty+lh-30)break;
-                    label(ui,"rs.p."+kv.first,ctnX+20,yy,cxW-40,26,kv.first,18.0f,p.text); yy+=28;
+                    if(yy>cty+lh-60)break;
+                    std::string pname = kv.first;
+                    // Strip [] tags for display
+                    std::string dispName = pname;
+                    auto bp = dispName.find(" [");
+                    if (bp != std::string::npos) dispName = dispName.substr(0, bp);
+                    label(ui,"rs.p."+pname,ctnX+20,yy,cxW-40,26,dispName,18.0f,p.text); yy+=28;
                     std::string hs;for(auto& h:kv.second){if(!hs.empty())hs+="  ";hs+=h;}
-                    label(ui,"rs.h."+kv.first,ctnX+36,yy,cxW-56,22,hs,15.0f,p.muted); yy+=26;
+                    label(ui,"rs.h."+pname,ctnX+36,yy,cxW-56,22,hs,15.0f,p.muted); yy+=26;
                 }
+            }
+            // Process injection tool for background hotkeys
+            yy += 10;
+            label(ui,"rs.inject.title",ctnX+20,yy,cxW-40,24,"注入检测 (后台热键)",16.0f,p.text); yy+=28;
+            label(ui,"rs.inject.hint",ctnX+20,yy,cxW-40,40,
+                "对于不弹窗的后台热键(如QQ音乐暂停)，注入DLL到目标进程\n可100%确认。点击进程旁的「注入」按钮即可。",14.0f,p.muted);
+            yy+=44;
+            if (!state.processHotkeys.empty()) {
+                for (auto& kv : state.processHotkeys) {
+                    if (yy > cty + lh - 40) break;
+                    std::string pn = kv.first;
+                    // Only show non-confirmed processes
+                    if (pn.find("[已确认]") != std::string::npos) continue;
+                    auto bp = pn.find(" [");
+                    std::string cleanName = (bp != std::string::npos) ? pn.substr(0, bp) : pn;
+                    if (cleanName == "Windows 系统") continue;
+                    label(ui,"rs.inj.p."+cleanName,ctnX+20,yy,cxW-160,24,cleanName,16.0f,p.text);
+                    ui.rect("rs.inj.btn."+cleanName).x(ctnX+cxW-140).y(yy+2).size(48,22)
+                        .states(p.surface,p.surfaceHover,p.surfacePressed).radius(5).border(1,p.border)
+                        .onClick([cleanName]{
+                            std::thread([cleanName]{
+                                std::lock_guard<std::mutex> lk(stateMutex);
+                                state.processDetectStatus = "正在注入 " + cleanName + "...";
+                            }).detach();
+                            // Find PID and inject
+                            HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                            if (snap != INVALID_HANDLE_VALUE) {
+                                PROCESSENTRY32W pe = {sizeof(pe)};
+                                if (Process32FirstW(snap, &pe)) {
+                                    do {
+                                        std::string n = WsToUtf8(pe.szExeFile);
+                                        if (n == cleanName || n == cleanName + ".exe" ||
+                                            (cleanName.find(n) != std::string::npos)) {
+                                            StartInjectPipe();
+                                            InjectDll(pe.th32ProcessID);
+                                            std::lock_guard<std::mutex> lk(stateMutex);
+                                            state.processDetectStatus = "已注入 " + cleanName + " (PID=" + std::to_string(pe.th32ProcessID) + ")。如果该进程注册了热键，将在日志中显示。";
+                                            break;
+                                        }
+                                    } while (Process32NextW(snap, &pe));
+                                }
+                                CloseHandle(snap);
+                            }
+                        }).build();
+                    ui.text("rs.inj.t."+cleanName).x(ctnX+cxW-140).y(yy+2).size(48,22)
+                        .text("注入").fontSize(13).lineHeight(15).color(p.text)
+                        .horizontalAlign(eui::HorizontalAlign::Center).verticalAlign(eui::VerticalAlign::Center).build();
+                    yy += 28;
+                }
+            }
+            if (!state.processDetectStatus.empty()) {
+                label(ui,"rs.inject.result",ctnX+20,yy,cxW-40,22,state.processDetectStatus,15.0f,{0.95f,0.75f,0.18f,1.0f}); yy+=26;
             }
         } else if (state.activeTab == 3) {
             // ====== 设置 ======
