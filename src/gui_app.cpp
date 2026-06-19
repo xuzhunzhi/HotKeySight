@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <commdlg.h>
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -79,6 +80,10 @@ struct AppState {
     std::string monitorErrorMsg;
     int accentPresetDark = 0;
     int accentPresetLight = 0;
+    bool useCustomAccentDark = false;
+    bool useCustomAccentLight = false;
+    float customRgbDark[3] = {0.0f,0.471f,0.831f};
+    float customRgbLight[3] = {0.0f,0.471f,0.831f};
     std::map<std::string, std::set<std::string>> hotkeyConflicts; // combo -> {processes}
 };
 static AppState state;
@@ -752,20 +757,67 @@ std::string ReadRegistryHotkeys() {
 // ============================================================
 struct Palette { eui::Color bg, surface, surfaceHover, surfacePressed, text, muted, border, strong, strongText, accent, accentText; eui::Shadow panelShadow; };
 struct AccentPreset { const char* name; eui::Color darkAccent; eui::Color lightAccent; };
+#define C(r,g,b) eui::Color{(r)/255.0f,(g)/255.0f,(b)/255.0f,1.0f}
 static const AccentPreset kAccentPresets[] = {
-    // Windows 11 theme-style colors
-    {"系统蓝", {0.000f,0.471f,0.831f}, {0.000f,0.471f,0.831f}},
-    {"青绿",   {0.012f,0.514f,0.529f}, {0.012f,0.514f,0.529f}},
-    {"翠绿",   {0.063f,0.486f,0.063f}, {0.063f,0.486f,0.063f}},
-    {"沙橙",   {1.000f,0.549f,0.000f}, {1.000f,0.549f,0.000f}},
-    {"深红",   {0.910f,0.067f,0.137f}, {0.800f,0.050f,0.110f}},
-    {"紫色",   {0.533f,0.090f,0.600f}, {0.533f,0.090f,0.600f}},
-    {"粉红",   {0.890f,0.000f,0.333f}, {0.850f,0.000f,0.300f}},
-    {"石墨",   {0.400f,0.420f,0.450f}, {0.380f,0.400f,0.430f}},
+    // Windows 11 official accent palette (48 colors from system settings)
+    {"#FFB900", C(255,185,0), C(255,185,0)},
+    {"#FF8C00", C(255,140,0), C(255,140,0)},
+    {"#F7630C", C(247,99,12), C(247,99,12)},
+    {"#CA5010", C(202,80,16), C(202,80,16)},
+    {"#DA3B01", C(218,59,1), C(218,59,1)},
+    {"#EF6950", C(239,105,80), C(239,105,80)},
+    {"#D13438", C(209,52,56), C(209,52,56)},
+    {"#FF4343", C(255,67,67), C(255,67,67)},
+    {"#E74856", C(231,72,86), C(231,72,86)},
+    {"#E81123", C(232,17,35), C(232,17,35)},
+    {"#EA005E", C(234,0,94), C(234,0,94)},
+    {"#C30052", C(195,0,82), C(195,0,82)},
+    {"#E3008C", C(227,0,140), C(227,0,140)},
+    {"#BF0077", C(191,0,119), C(191,0,119)},
+    {"#C239B3", C(194,57,179), C(194,57,179)},
+    {"#9A0089", C(154,0,137), C(154,0,137)},
+    {"#0078D4", C(0,120,212), C(0,120,212)},
+    {"#0064B4", C(0,100,180), C(0,100,180)},
+    {"#106EBE", C(16,110,190), C(16,110,190)},
+    {"#004E8C", C(0,78,140), C(0,78,140)},
+    {"#0078D7", C(0,120,215), C(0,120,215)},
+    {"#0013A0", C(0,19,160), C(0,19,160)},
+    {"#005A9E", C(0,90,158), C(0,90,158)},
+    {"#0099BC", C(0,153,188), C(0,153,188)},
+    {"#2D7D9A", C(45,125,154), C(45,125,154)},
+    {"#00B7C3", C(0,183,195), C(0,183,195)},
+    {"#038387", C(3,131,135), C(3,131,135)},
+    {"#00B294", C(0,178,148), C(0,178,148)},
+    {"#018574", C(1,133,116), C(1,133,116)},
+    {"#00CC6A", C(0,204,106), C(0,204,106)},
+    {"#10893E", C(16,137,62), C(16,137,62)},
+    {"#007C3C", C(0,124,60), C(0,124,60)},
+    {"#107C10", C(16,124,16), C(16,124,16)},
+    {"#498205", C(73,130,5), C(73,130,5)},
+    {"#647C64", C(100,124,100), C(100,124,100)},
+    {"#515C6B", C(81,92,107), C(81,92,107)},
+    {"#567C73", C(86,124,115), C(86,124,115)},
+    {"#8764B8", C(135,100,184), C(135,100,184)},
+    {"#881798", C(136,23,152), C(136,23,152)},
+    {"#744DA9", C(116,77,169), C(116,77,169)},
+    {"#B146C2", C(177,70,194), C(177,70,194)},
+    {"#8E8CD8", C(142,140,216), C(142,140,216)},
+    {"#6B69D6", C(107,105,214), C(107,105,214)},
+    {"#69797E", C(105,121,126), C(105,121,126)},
+    {"#7A7574", C(122,117,116), C(122,117,116)},
+    {"#4A5459", C(74,84,89), C(74,84,89)},
+    {"#8A8A8A", C(138,138,138), C(138,138,138)},
+    {"#767676", C(118,118,118), C(118,118,118)},
 };
+#undef C
 constexpr int kAccentPresetCount = sizeof(kAccentPresets)/sizeof(kAccentPresets[0]);
 
 eui::Color GetAccent() {
+    bool useCustom = state.darkMode ? state.useCustomAccentDark : state.useCustomAccentLight;
+    if (useCustom) {
+        float* c = state.darkMode ? state.customRgbDark : state.customRgbLight;
+        return {c[0], c[1], c[2], 1.0f};
+    }
     int idx = state.darkMode ? state.accentPresetDark : state.accentPresetLight;
     if (idx < 0 || idx >= kAccentPresetCount) idx = 0;
     return state.darkMode ? kAccentPresets[idx].darkAccent : kAccentPresets[idx].lightAccent;
@@ -1279,25 +1331,64 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 sy+=46;
             }
             sy+=6;
-            // Accent color picker
-            label(ui,"st.accent.lbl",ctnX+20,sy,cxW-40,26,"强调色",18.0f,p.text);
-            sy+=32;
+            // Accent color picker — compact swatches, 8 per row
+            label(ui,"st.accent.lbl",ctnX+20,sy,cxW-40,26,"强调色 (Windows 11 官方色板, 共48色)",18.0f,p.text);
+            sy+=30;
             int curPreset = state.darkMode ? state.accentPresetDark : state.accentPresetLight;
+            bool useCustom = state.darkMode ? state.useCustomAccentDark : state.useCustomAccentLight;
+            float sw = 28.0f, sh = 28.0f, gap = 4.0f;
+            int cols = 8;
+            float startX = ctnX + 28;
             for (int pi = 0; pi < kAccentPresetCount; pi++) {
-                bool sel = curPreset == pi;
-                float cx2 = ctnX + 24 + (pi % 4) * 104;
-                float cy2 = sy + (pi / 4) * 34;
-                ui.rect("st.color."+std::to_string(pi)).x(cx2).y(cy2).size(88,28)
-                    .states(sel?kAccentPresets[pi].darkAccent:p.surface, p.surfaceHover, p.surfacePressed)
-                    .radius(sel?14:8).border(sel?0.0f:1.0f, sel?eui::Color{0,0,0,0}:p.border)
+                int row = pi / cols, col = pi % cols;
+                float sx = startX + col * (sw + gap);
+                float sy2 = sy + row * (sh + gap);
+                bool sel = !useCustom && curPreset == pi;
+                eui::Color fill = state.darkMode ? kAccentPresets[pi].darkAccent : kAccentPresets[pi].lightAccent;
+                ui.rect("st.sw."+std::to_string(pi)).x(sx).y(sy2).size(sw,sh)
+                    .states(fill, fill, fill).radius(sel?14.0f:4.0f)
+                    .border(sel?2.0f:1.0f, sel?eui::Color{1,1,1,1}:p.border)
                     .onClick([pi]{std::lock_guard<std::mutex> lk(stateMutex);
-                        if(state.darkMode)state.accentPresetDark=pi;else state.accentPresetLight=pi;SaveTheme();}).build();
-                ui.text("st.color.t."+std::to_string(pi)).x(cx2).y(cy2).size(88,28)
-                    .text(kAccentPresets[pi].name).fontSize(14).lineHeight(16)
-                    .color(sel?eui::Color{0.94f,0.96f,0.99f,1.0f}:p.text)
+                        if(state.darkMode){state.accentPresetDark=pi;state.useCustomAccentDark=false;}
+                        else{state.accentPresetLight=pi;state.useCustomAccentLight=false;}
+                        SaveTheme();}).build();
+            }
+            int rows = (kAccentPresetCount + cols - 1) / cols;
+            sy += rows * (sh + gap) + 10;
+
+            // Custom color button — opens Windows ChooseColor dialog
+            {
+                bool isCustom = useCustom;
+                float* crgb = state.darkMode ? state.customRgbDark : state.customRgbLight;
+                eui::Color custCol = isCustom ? eui::Color{crgb[0],crgb[1],crgb[2],1.0f} : p.surface;
+                ui.rect("st.custom").x(startX).y(sy).size(sw+60,sh)
+                    .states(custCol, p.surfaceHover, p.surfacePressed)
+                    .radius(6).border(1, isCustom?eui::Color{1,1,1,1}:p.border)
+                    .onClick([]{
+                        static COLORREF custColors[16] = {};
+                        CHOOSECOLORW cc = {}; cc.lStructSize = sizeof(cc);
+                        cc.hwndOwner = GetActiveWindow(); if(!cc.hwndOwner) cc.hwndOwner = GetForegroundWindow();
+                        cc.lpCustColors = custColors;
+                        cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+                        float* c = state.darkMode ? state.customRgbDark : state.customRgbLight;
+                        cc.rgbResult = RGB((int)(c[0]*255),(int)(c[1]*255),(int)(c[2]*255));
+                        if (ChooseColorW(&cc)) {
+                            std::lock_guard<std::mutex> lk(stateMutex);
+                            float* out = state.darkMode ? state.customRgbDark : state.customRgbLight;
+                            out[0] = GetRValue(cc.rgbResult)/255.0f;
+                            out[1] = GetGValue(cc.rgbResult)/255.0f;
+                            out[2] = GetBValue(cc.rgbResult)/255.0f;
+                            if(state.darkMode) state.useCustomAccentDark = true;
+                            else state.useCustomAccentLight = true;
+                            SaveTheme();
+                        }
+                    }).build();
+                ui.text("st.custom.t").x(startX).y(sy).size(sw+60,sh)
+                    .text(isCustom ? "已自定义" : "自定义...").fontSize(14).lineHeight(16)
+                    .color(isCustom ? eui::Color{0.94f,0.96f,0.99f,1.0f} : p.text)
                     .horizontalAlign(eui::HorizontalAlign::Center).verticalAlign(eui::VerticalAlign::Center).build();
             }
-            sy += 64;
+            sy += sh + 16;
 
             label(ui,"st.sponsor",ctnX+20,sy,cxW-40,28,"\xe2\x9d\xa4 支持开发",18.0f,p.text);
             sy+=32;
