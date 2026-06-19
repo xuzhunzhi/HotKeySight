@@ -5,7 +5,6 @@
 
 #include <windows.h>
 #include <shellapi.h>
-#include <commdlg.h>
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -84,6 +83,7 @@ struct AppState {
     bool useCustomAccentLight = false;
     float customRgbDark[3] = {0.0f,0.471f,0.831f};
     float customRgbLight[3] = {0.0f,0.471f,0.831f};
+    bool colorPickerOpen = false;
     std::map<std::string, std::set<std::string>> hotkeyConflicts; // combo -> {processes}
 };
 static AppState state;
@@ -1356,34 +1356,16 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             int rows = (kAccentPresetCount + cols - 1) / cols;
             sy += rows * (sh + gap) + 10;
 
-            // Custom color button — opens Windows ChooseColor dialog
+            // Custom color — opens EUI-NEO built-in colorPicker popover
             {
                 bool isCustom = useCustom;
                 float* crgb = state.darkMode ? state.customRgbDark : state.customRgbLight;
                 eui::Color custCol = isCustom ? eui::Color{crgb[0],crgb[1],crgb[2],1.0f} : p.surface;
-                ui.rect("st.custom").x(startX).y(sy).size(sw+60,sh)
+                ui.rect("st.custom.open").x(startX).y(sy).size(sw+60,sh)
                     .states(custCol, p.surfaceHover, p.surfacePressed)
                     .radius(6).border(1, isCustom?eui::Color{1,1,1,1}:p.border)
-                    .onClick([]{
-                        static COLORREF custColors[16] = {};
-                        CHOOSECOLORW cc = {}; cc.lStructSize = sizeof(cc);
-                        cc.hwndOwner = GetActiveWindow(); if(!cc.hwndOwner) cc.hwndOwner = GetForegroundWindow();
-                        cc.lpCustColors = custColors;
-                        cc.Flags = CC_FULLOPEN | CC_RGBINIT;
-                        float* c = state.darkMode ? state.customRgbDark : state.customRgbLight;
-                        cc.rgbResult = RGB((int)(c[0]*255),(int)(c[1]*255),(int)(c[2]*255));
-                        if (ChooseColorW(&cc)) {
-                            std::lock_guard<std::mutex> lk(stateMutex);
-                            float* out = state.darkMode ? state.customRgbDark : state.customRgbLight;
-                            out[0] = GetRValue(cc.rgbResult)/255.0f;
-                            out[1] = GetGValue(cc.rgbResult)/255.0f;
-                            out[2] = GetBValue(cc.rgbResult)/255.0f;
-                            if(state.darkMode) state.useCustomAccentDark = true;
-                            else state.useCustomAccentLight = true;
-                            SaveTheme();
-                        }
-                    }).build();
-                ui.text("st.custom.t").x(startX).y(sy).size(sw+60,sh)
+                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.colorPickerOpen=true;}).build();
+                ui.text("st.custom.open.t").x(startX).y(sy).size(sw+60,sh)
                     .text(isCustom ? "已自定义" : "自定义...").fontSize(14).lineHeight(16)
                     .color(isCustom ? eui::Color{0.94f,0.96f,0.99f,1.0f} : p.text)
                     .horizontalAlign(eui::HorizontalAlign::Center).verticalAlign(eui::VerticalAlign::Center).build();
@@ -1448,6 +1430,27 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 g_resolvedPids.clear();
             }
         }
+
+        // EUI-NEO colorPicker — modal overlay, rendered at root for proper z-order
+        std::vector<eui::Color> presetColors;
+        for (int pi = 0; pi < kAccentPresetCount; pi++)
+            presetColors.push_back(state.darkMode ? kAccentPresets[pi].darkAccent : kAccentPresets[pi].lightAccent);
+        components::colorPicker(ui, "accentPicker")
+            .open(state.colorPickerOpen)
+            .colors(presetColors)
+            .value(GetAccent())
+            .size(std::min(420.0f, screen.width*0.55f), 380)
+            .screen(screen.width, screen.height)
+            .theme(themeTokens())
+            .onChange([](eui::Color c){
+                std::lock_guard<std::mutex> lk(stateMutex);
+                float* out = state.darkMode ? state.customRgbDark : state.customRgbLight;
+                out[0]=c.r; out[1]=c.g; out[2]=c.b;
+                if(state.darkMode)state.useCustomAccentDark=true;else state.useCustomAccentLight=true;
+                SaveTheme();
+            })
+            .onOpenChange([](bool open){std::lock_guard<std::mutex> lk(stateMutex);state.colorPickerOpen=open;})
+            .build();
 
     }).build();
 }
