@@ -753,13 +753,15 @@ std::string ReadRegistryHotkeys() {
 struct Palette { eui::Color bg, surface, surfaceHover, surfacePressed, text, muted, border, strong, strongText, accent, accentText; eui::Shadow panelShadow; };
 struct AccentPreset { const char* name; eui::Color darkAccent; eui::Color lightAccent; };
 static const AccentPreset kAccentPresets[] = {
-    {"默认蓝", {0.180f,0.340f,0.620f}, {0.180f,0.340f,0.620f}},
-    {"天蓝",   {0.200f,0.500f,0.850f}, {0.150f,0.450f,0.800f}},
-    {"青绿",   {0.100f,0.550f,0.500f}, {0.080f,0.520f,0.470f}},
-    {"紫罗兰", {0.450f,0.280f,0.650f}, {0.420f,0.250f,0.620f}},
-    {"玫红",   {0.750f,0.200f,0.450f}, {0.720f,0.180f,0.420f}},
-    {"橙色",   {0.850f,0.420f,0.100f}, {0.820f,0.400f,0.080f}},
-    {"灰色",   {0.400f,0.420f,0.450f}, {0.380f,0.400f,0.430f}},
+    // Windows 11 theme-style colors
+    {"系统蓝", {0.000f,0.471f,0.831f}, {0.000f,0.471f,0.831f}},
+    {"青绿",   {0.012f,0.514f,0.529f}, {0.012f,0.514f,0.529f}},
+    {"翠绿",   {0.063f,0.486f,0.063f}, {0.063f,0.486f,0.063f}},
+    {"沙橙",   {1.000f,0.549f,0.000f}, {1.000f,0.549f,0.000f}},
+    {"深红",   {0.910f,0.067f,0.137f}, {0.800f,0.050f,0.110f}},
+    {"紫色",   {0.533f,0.090f,0.600f}, {0.533f,0.090f,0.600f}},
+    {"粉红",   {0.890f,0.000f,0.333f}, {0.850f,0.000f,0.300f}},
+    {"石墨",   {0.400f,0.420f,0.450f}, {0.380f,0.400f,0.430f}},
 };
 constexpr int kAccentPresetCount = sizeof(kAccentPresets)/sizeof(kAccentPresets[0]);
 
@@ -797,7 +799,7 @@ components::theme::ThemeColorTokens themeTokens() { Palette p = palette(); retur
 // ============================================================
 void label(eui::Ui& ui, const std::string& id, float x, float y, float w, float h,
            const std::string& text, float fs, eui::Color c, eui::HorizontalAlign ha = eui::HorizontalAlign::Left) {
-    float lh = fs * 1.35f; // proper Chinese line height
+    float lh = fs * 1.5f; // wider Chinese line height to prevent overlap
     ui.text(id).x(x).y(y).size(w,h).text(text).fontSize(fs).lineHeight(lh).color(c).horizontalAlign(ha).verticalAlign(eui::VerticalAlign::Center).build();
 }
 void panel(eui::Ui& ui, const std::string& id, float x, float y, float w, float h, float r, eui::Color fill, eui::Color border = {0,0,0,0}, eui::Shadow shadow = {}) {
