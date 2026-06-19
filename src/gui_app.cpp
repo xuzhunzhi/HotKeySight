@@ -1041,7 +1041,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
         // === Content area: sidebar + tab content (full width) ===
         float ly = ty + 100.0f;
         float lh = screen.height - ly - 20.0f;
-        float sideW = 120.0f;
+        float sideW = 130.0f;
         float cxW = cw - sideW - 10.0f;
         float ctnX = cx + sideW + 10.0f;
 
@@ -1122,12 +1122,13 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 snprintf(buf, 256, "监控已记录 %zu 个进程的热键使用", state.processHotkeys.size());
                 label(ui, "hm.mon", ctnX+24, ciy+210, cxW-48, 26, buf, 16.0f, p.muted);
             }
-            label(ui, "hm.usage", ctnX+24, ciy+280, cxW-48, 200,
+            label(ui, "hm.usage", ctnX+24, ciy+250, cxW-48, 160,
                 "使用方法\n\n"
-                "1. 点击「扫描」— 暴力枚举所有 RegisterHotKey 注册的热键\n"
-                "2. 点击「开始监控」— 按下热键，观察哪个进程响应\n"
-                "3. 切换到「热键监控」标签查看实时日志\n"
-                "4. 切换到「结果」标签查看进程→热键汇总", 16.0f, p.muted);
+                "1. 点击「扫描」— 枚举所有 RegisterHotKey 热键\n"
+                "2. 点击「开始监控」— 按下热键观察进程响应\n"
+                "3. 切换「热键监控」标签查看实时日志\n"
+                "4. 切换「结果」标签查看进程→热键汇总\n"
+                "5. 主题颜色在「设置」中调整", 16.0f, p.muted);
 
         } else if (state.activeTab == 1) {
             // ====== 热键监控: split left=scan results, right=monitor log ======
@@ -1180,7 +1181,13 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             }
 
             // Right: monitor log
-            label(ui,"sp.log.title",rightX+8,ciy,halfW-16,28,"监控日志",22.0f,p.text);
+            label(ui,"sp.log.title",rightX+8,ciy,halfW-60,28,"监控日志",22.0f,p.text);
+            if(!state.events.empty()){
+                ui.rect("sp.log.clear").x(rightX+halfW-52).y(ciy+2).size(44,24).states(p.surface,p.surfaceHover,p.surfacePressed).radius(6).border(1,p.border)
+                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.events.clear();state.processHotkeys.clear();}).build();
+                ui.text("sp.log.clear.t").x(rightX+halfW-52).y(ciy+2).size(44,24).text("清空").fontSize(13).lineHeight(15).color(p.text)
+                    .horizontalAlign(eui::HorizontalAlign::Center).verticalAlign(eui::VerticalAlign::Center).build();
+            }
             float lgy=ciy+32;
             if(state.events.empty()&&!state.monitoring){
                 label(ui,"sp.log.empty",rightX+8,lgy+30,halfW-16,80,"点击「开始监控」后按热键",16.0f,p.muted,eui::HorizontalAlign::Center);
@@ -1201,8 +1208,20 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             label(ui,"rs.title",ctnX+20,ciy+4,cxW-40,32,"进程 → 热键汇总",22.0f,p.text);
             float yy=ciy+42;
             if(state.processHotkeys.empty()){
-                label(ui,"rs.empty",ctnX+20,yy+30,cxW-40,60,"暂无数据。开始监控并按下热键后，\n检测到的进程→热键映射会出现在这里。",17.0f,p.muted,eui::HorizontalAlign::Center);
+                label(ui,"rs.empty",ctnX+20,yy+40,cxW-40,60,"暂无数据。\n开始监控并按下热键后，检测到的进程→热键映射会出现在这里。\n如果同一快捷键被多个进程使用，会标记 ⚠ 冲突。",17.0f,p.muted,eui::HorizontalAlign::Center);
             }else{
+                // Show conflict summary first
+                if(!state.hotkeyConflicts.empty()){
+                    label(ui,"rs.conflict.title",ctnX+20,yy,cxW-40,26,"⚠ 检测到的热键冲突",18.0f,{0.95f,0.75f,0.18f,1.0f}); yy+=30;
+                    for(auto& kv2:state.hotkeyConflicts){
+                        if(kv2.second.size()<2)continue;
+                        if(yy>cty+lh-30)break;
+                        std::string owners;
+                        for(auto& o:kv2.second){if(!owners.empty())owners+=" vs ";owners+=o;}
+                        label(ui,"rs.conf."+kv2.first,ctnX+20,yy,cxW-40,22,kv2.first+"  →  "+owners,15.0f,{0.95f,0.75f,0.18f,1.0f}); yy+=24;
+                    }
+                    yy+=10;
+                }
                 for(auto& kv:state.processHotkeys){
                     if(yy>cty+lh-30)break;
                     label(ui,"rs.p."+kv.first,ctnX+20,yy,cxW-40,26,kv.first,18.0f,p.text); yy+=28;
