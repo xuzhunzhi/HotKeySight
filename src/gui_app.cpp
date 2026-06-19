@@ -273,8 +273,18 @@ static std::string GetProcessName(DWORD pid) {
     }
     CloseHandle(hp);
     std::string raw(buf);
-    auto it = g_friendlyNames.find(raw);
-    if (it != g_friendlyNames.end()) return it->second;
+    // Normalize: lowercase, strip .exe extension for matching
+    std::string lower = raw;
+    for (auto& c : lower) c = (char)tolower((unsigned char)c);
+    if (lower.size() > 4 && lower.substr(lower.size()-4) == ".exe")
+        lower = lower.substr(0, lower.size()-4);
+    for (auto& kv : g_friendlyNames) {
+        std::string keyLower = kv.first;
+        for (auto& c : keyLower) c = (char)tolower((unsigned char)c);
+        if (keyLower.size() > 4 && keyLower.substr(keyLower.size()-4) == ".exe")
+            keyLower = keyLower.substr(0, keyLower.size()-4);
+        if (keyLower == lower) return kv.second;
+    }
     return raw;
 }
 
