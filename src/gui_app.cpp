@@ -257,9 +257,34 @@ static std::map<std::string, std::string> g_friendlyNames = {
     {"FlowLauncher.exe", "FlowLauncher"},
     {"Keyviz.exe", "Keyviz"},
     {"Carnac.exe", "Carnac"},
+    {"miservice.exe", "小米电脑管家"},
+    {"miclipboard.exe", "小米电脑管家"},
+    {"xiaomipcmanager.exe", "小米电脑管家"},
+    {"micloudservice.exe", "小米云服务"},
+    {"qmlauncher.exe", "QQ电脑管家"},
+    {"qqpcmgr.exe", "QQ电脑管家"},
+    {"qqmusic.exe", "QQ音乐"},
+    {"cloudmusic.exe", "网易云音乐"},
     {"Snipaste.exe", "Snipaste"},
     {"snipaste.exe", "Snipaste"},
 };
+
+static std::string NormalizeProcName(std::string raw) {
+    // lowercase + strip .exe
+    std::string s = raw;
+    for (auto& c : s) c = (char)tolower((unsigned char)c);
+    if (s.size() > 4 && s.substr(s.size()-4) == ".exe")
+        s = s.substr(0, s.size()-4);
+    // Lookup friendly name
+    for (auto& kv : g_friendlyNames) {
+        std::string k = kv.first;
+        for (auto& c : k) c = (char)tolower((unsigned char)c);
+        if (k.size() > 4 && k.substr(k.size()-4) == ".exe")
+            k = k.substr(0, k.size()-4);
+        if (k == s) return kv.second;
+    }
+    return raw; // fallback: return original
+}
 
 static std::string GetProcessName(DWORD pid) {
     if (pid == 0 || pid == 4) return "";
@@ -272,20 +297,7 @@ static std::string GetProcessName(DWORD pid) {
         WideCharToMultiByte(CP_UTF8, 0, fn ? fn + 1 : wn, -1, buf, 255, nullptr, nullptr);
     }
     CloseHandle(hp);
-    std::string raw(buf);
-    // Normalize: lowercase, strip .exe extension for matching
-    std::string lower = raw;
-    for (auto& c : lower) c = (char)tolower((unsigned char)c);
-    if (lower.size() > 4 && lower.substr(lower.size()-4) == ".exe")
-        lower = lower.substr(0, lower.size()-4);
-    for (auto& kv : g_friendlyNames) {
-        std::string keyLower = kv.first;
-        for (auto& c : keyLower) c = (char)tolower((unsigned char)c);
-        if (keyLower.size() > 4 && keyLower.substr(keyLower.size()-4) == ".exe")
-            keyLower = keyLower.substr(0, keyLower.size()-4);
-        if (keyLower == lower) return kv.second;
-    }
-    return raw;
+    return NormalizeProcName(std::string(buf));
 }
 
 // ============================================================
@@ -709,7 +721,8 @@ bool StartMonitor() {
         nullptr, ForegroundHook, 0, 0, WINEVENT_OUTOFCONTEXT);
     if (!g_fgHook) errs += "前台检测钩子失败。";
 
-    g_wndHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE,
+    // Catch both CREATE and SHOW — some popups (e.g., clipboard) are created hidden then shown
+    g_wndHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW,
         nullptr, WindowCreateHook, 0, 0, WINEVENT_OUTOFCONTEXT);
     if (!g_wndHook) errs += "窗口创建检测钩子失败。";
 
@@ -1044,7 +1057,7 @@ static void InjectPipeServer() {
             PipeHotkeyMsg msg;
             DWORD read;
             while (ReadFile(hPipe, &msg, sizeof(msg), &read, nullptr) && read == sizeof(msg)) {
-                std::string procName = msg.name;
+                std::string procName = NormalizeProcName(msg.name);
                 std::string combo = ComboStr(msg.modifiers, msg.vk);
                 TrackConflict(procName, combo);
                 {
