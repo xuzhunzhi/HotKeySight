@@ -65,15 +65,38 @@ struct AppState {
     std::vector<MonitorEvent> events;
     std::map<std::string, std::set<std::string>> processHotkeys;
     std::string statusText = "就绪。点击扫描启动。";
+    std::string statusType = "info"; // "info", "warn", "error"
     std::string registryInfo;
     int eventLogLimit = 200;
     int leftPage = 0;
     int activeTab = 0; // 0=Home, 1=热键监控, 2=结果, 3=设置, 4=关于
     bool darkMode = true;
     bool minimizeToTray = true;
+    bool isAdmin = false;
+    bool scanError = false;
+    bool monitorError = false;
+    std::string scanErrorMsg;
+    std::string monitorErrorMsg;
+    int accentPresetDark = 0;
+    int accentPresetLight = 0;
+    std::map<std::string, std::set<std::string>> hotkeyConflicts; // combo -> {processes}
 };
 static AppState state;
 static std::mutex stateMutex;
+
+static void TrackConflict(const std::string& proc, const std::string& combo) {
+    auto& owners = state.hotkeyConflicts[combo];
+    owners.insert(proc);
+}
+static std::string ConflictBadge(const std::string& combo) {
+    auto it = state.hotkeyConflicts.find(combo);
+    if (it != state.hotkeyConflicts.end() && it->second.size() > 1) {
+        std::string s = " \xe2\x9a\xa0";
+        int n=0; for(auto& p:it->second){if(n++)s+=",";s+=p;}
+        return s;
+    }
+    return "";
+}
 
 // Keyboard hook
 static HHOOK g_kbHook = nullptr;
@@ -638,18 +661,33 @@ VOID CALLBACK WindowCreateHook(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hw
 
 bool StartMonitor() {
     if (g_kbHook) return true;
+    state.monitorError = false;
+    std::string errs;
 
-    // Keyboard hook
     g_kbHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandle(nullptr), 0);
-    if (!g_kbHook) return false;
+    if (!g_kbHook) {
+        DWORD e = GetLastError();
+        char buf[128];
+        snprintf(buf, 128, "键盘钩子失败 (错误 %lu)。请以管理员运行。", e);
+        errs += buf;
+    }
 
-    // Foreground change detection
     g_fgHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
         nullptr, ForegroundHook, 0, 0, WINEVENT_OUTOFCONTEXT);
+    if (!g_fgHook) errs += "前台检测钩子失败。";
 
-    // New window creation detection (screenshot tools, popups, etc.)
     g_wndHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE,
         nullptr, WindowCreateHook, 0, 0, WINEVENT_OUTOFCONTEXT);
+    if (!g_wndHook) errs += "窗口创建检测钩子失败。";
+
+    if (!g_kbHook) {
+        // Critical failure — clean up and report
+        if (g_fgHook) { UnhookWinEvent(g_fgHook); g_fgHook = nullptr; }
+        if (g_wndHook) { UnhookWinEvent(g_wndHook); g_wndHook = nullptr; }
+        state.monitorError = true;
+        state.monitorErrorMsg = errs;
+        return false;
+    }
 
     g_ctrlDown = g_altDown = g_shiftDown = g_winDown = false;
     g_lastHotkeyTick = 0;
@@ -713,13 +751,33 @@ std::string ReadRegistryHotkeys() {
 // Theme
 // ============================================================
 struct Palette { eui::Color bg, surface, surfaceHover, surfacePressed, text, muted, border, strong, strongText, accent, accentText; eui::Shadow panelShadow; };
+struct AccentPreset { const char* name; eui::Color darkAccent; eui::Color lightAccent; };
+static const AccentPreset kAccentPresets[] = {
+    {"默认蓝", {0.180f,0.340f,0.620f}, {0.180f,0.340f,0.620f}},
+    {"天蓝",   {0.200f,0.500f,0.850f}, {0.150f,0.450f,0.800f}},
+    {"青绿",   {0.100f,0.550f,0.500f}, {0.080f,0.520f,0.470f}},
+    {"紫罗兰", {0.450f,0.280f,0.650f}, {0.420f,0.250f,0.620f}},
+    {"玫红",   {0.750f,0.200f,0.450f}, {0.720f,0.180f,0.420f}},
+    {"橙色",   {0.850f,0.420f,0.100f}, {0.820f,0.400f,0.080f}},
+    {"灰色",   {0.400f,0.420f,0.450f}, {0.380f,0.400f,0.430f}},
+};
+constexpr int kAccentPresetCount = sizeof(kAccentPresets)/sizeof(kAccentPresets[0]);
+
+eui::Color GetAccent() {
+    int idx = state.darkMode ? state.accentPresetDark : state.accentPresetLight;
+    if (idx < 0 || idx >= kAccentPresetCount) idx = 0;
+    return state.darkMode ? kAccentPresets[idx].darkAccent : kAccentPresets[idx].lightAccent;
+}
+
 Palette palette() {
+    eui::Color accent = GetAccent();
+    eui::Color accentText = {0.94f, 0.96f, 0.99f, 1.0f};
     if (state.darkMode) {
         return {
             {0.055f, 0.058f, 0.068f}, {0.080f, 0.084f, 0.098f}, {0.105f, 0.110f, 0.128f},
             {0.130f, 0.135f, 0.155f}, {0.940f, 0.945f, 0.955f}, {0.550f, 0.565f, 0.590f},
             {0.180f, 0.190f, 0.210f}, {0.120f, 0.180f, 0.330f}, {0.880f, 0.920f, 0.980f},
-            {0.180f, 0.340f, 0.620f}, {0.940f, 0.960f, 0.990f},
+            accent, accentText,
             {true, {0.0f, 8.0f}, 28.0f, 0.0f, {0.0f, 0.0f, 0.0f, 0.35f}}
         };
     }
@@ -727,7 +785,7 @@ Palette palette() {
         {0.965f, 0.966f, 0.970f}, {1.000f, 1.000f, 1.000f}, {0.930f, 0.935f, 0.945f},
         {0.880f, 0.890f, 0.905f}, {0.040f, 0.042f, 0.048f}, {0.550f, 0.565f, 0.590f},
         {0.840f, 0.850f, 0.870f}, {0.120f, 0.180f, 0.330f}, {0.980f, 0.982f, 0.985f},
-        {0.180f, 0.340f, 0.620f}, {0.035f, 0.037f, 0.044f},
+        accent, accentText,
         {true, {0.0f, 6.0f}, 24.0f, 0.0f, {0.100f, 0.120f, 0.180f, 0.12f}}
     };
 }
@@ -826,13 +884,63 @@ static void RemoveTray() {
     if (g_trayHwnd) DestroyWindow(g_trayHwnd);
 }
 
+static void SaveTheme() {
+    wchar_t exePath[MAX_PATH]; GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+    if (lastSlash) *(lastSlash + 1) = 0;
+    char exeDir[512]; WideCharToMultiByte(CP_UTF8, 0, exePath, -1, exeDir, 512, nullptr, nullptr);
+    std::string path = std::string(exeDir) + "config.txt";
+    FILE* f = fopen(path.c_str(), "w");
+    if (f) {
+        fprintf(f, "darkMode=%d\n", state.darkMode?1:0);
+        fprintf(f, "accentDark=%d\n", state.accentPresetDark);
+        fprintf(f, "accentLight=%d\n", state.accentPresetLight);
+        fprintf(f, "minimizeToTray=%d\n", state.minimizeToTray?1:0);
+        fclose(f);
+    }
+}
+static void LoadTheme() {
+    wchar_t exePath[MAX_PATH]; GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+    if (lastSlash) *(lastSlash + 1) = 0;
+    char exeDir[512]; WideCharToMultiByte(CP_UTF8, 0, exePath, -1, exeDir, 512, nullptr, nullptr);
+    std::string path = std::string(exeDir) + "config.txt";
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return;
+    char line[64]; int val;
+    while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "darkMode=%d", &val)==1) state.darkMode = val!=0;
+        else if (sscanf(line, "accentDark=%d", &val)==1) state.accentPresetDark = val;
+        else if (sscanf(line, "accentLight=%d", &val)==1) state.accentPresetLight = val;
+        else if (sscanf(line, "minimizeToTray=%d", &val)==1) state.minimizeToTray = val!=0;
+    }
+    fclose(f);
+}
+
 void compose(eui::Ui& ui, const eui::Screen& screen) {
-    // Load cached results on first frame
     static bool firstFrame = true;
     if (firstFrame) {
         firstFrame = false;
+        LoadTheme();
+        // Admin check
+        BOOL isAdmin = FALSE;
+        PSID adminGroup;
+        SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+        if (AllocateAndInitializeSid(&ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID,
+            DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+            CheckTokenMembership(nullptr, adminGroup, &isAdmin);
+            FreeSid(adminGroup);
+        }
+        state.isAdmin = isAdmin != FALSE;
+        if (!state.isAdmin) {
+            state.statusText = "警告: 未以管理员运行，键盘钩子可能受限。";
+            state.statusType = "warn";
+        }
+
         LoadCachedResults();
         InitTray();
+        // Register cleanup
+        std::atexit([]{ StopMonitor(); RemoveTray(); });
     }
 
     Palette p = palette();
@@ -848,7 +956,10 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
         // === Top bar ===
         float ty = 12.0f;
         label(ui, "title", cx, ty, 400, 44, "全局热键检测器", 36.0f, p.text);
-        label(ui, "status", cx, ty+46, cw, 22, state.statusText, 16.0f, p.muted);
+        eui::Color statusColor = p.muted;
+        if (state.statusType == "warn") statusColor = {0.95f, 0.75f, 0.18f, 1.0f};
+        else if (state.statusType == "error") statusColor = {0.95f, 0.28f, 0.30f, 1.0f};
+        label(ui, "status", cx, ty+46, cw, 22, state.statusText, 16.0f, statusColor);
 
         // Buttons
         float bx = cx + cw - 340.0f;
@@ -858,8 +969,15 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             .radius(10.0f).disabled(state.scanning)
             .onClick([] {
                 std::thread([] {
-                    { std::lock_guard<std::mutex> lk(stateMutex); state.scanning=true; state.scanProgress=0; state.occupied.clear(); state.scanned=false; state.statusText="正在扫描..."; }
+                    { std::lock_guard<std::mutex> lk(stateMutex); state.scanning=true; state.scanProgress=0; state.occupied.clear(); state.scanned=false; state.scanError=false; state.statusText="正在扫描..."; state.statusType="info"; }
                     CreateHiddenWindow();
+                    if(!g_hiddenWnd){
+                        std::lock_guard<std::mutex> lk(stateMutex);
+                        state.scanning=false; state.scanError=true;
+                        state.scanErrorMsg="无法创建扫描窗口 (RegisterClassEx/CreateWindowEx 失败)";
+                        state.statusText=state.scanErrorMsg; state.statusType="error";
+                        return;
+                    }
                     UINT mods[]={0,MOD_ALT,MOD_CONTROL,MOD_SHIFT,MOD_WIN,
                         MOD_ALT|MOD_CONTROL,MOD_ALT|MOD_SHIFT,MOD_ALT|MOD_WIN,
                         MOD_CONTROL|MOD_SHIFT,MOD_CONTROL|MOD_WIN,MOD_SHIFT|MOD_WIN,
@@ -882,14 +1000,14 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                         if((mod&MOD_ALT)&&(vk==VK_MENU||vk==VK_LMENU||vk==VK_RMENU))continue;
                         if((mod&MOD_CONTROL)&&(vk==VK_CONTROL||vk==VK_LCONTROL||vk==VK_RCONTROL))continue;
                         if((mod&MOD_SHIFT)&&(vk==VK_SHIFT||vk==VK_LSHIFT||vk==VK_RSHIFT))continue;
-                        tried++; if(id>0xBFFF)goto done;
+                        tried++; if(id>0xBFFF)goto scan_done;
                         BOOL ok=RegisterHotKey(g_hiddenWnd,id++,mod|MOD_NOREPEAT,vk);
                         DWORD err=ok?0:GetLastError();
                         if(ok)UnregisterHotKey(g_hiddenWnd,id-1);
                         else{std::lock_guard<std::mutex> lk(stateMutex);state.occupied.push_back({mod,vk,err});}
                         if(tried%200==0){std::lock_guard<std::mutex> lk(stateMutex);state.scanProgress=tried;char buf[64];snprintf(buf,64,"正在扫描... %d/%d",tried,total);state.statusText=buf;}
                     }}
-                    done: { std::lock_guard<std::mutex> lk(stateMutex); state.scanned=true; FinishScan(); state.registryInfo=ReadRegistryHotkeys(); }
+                    scan_done: { std::lock_guard<std::mutex> lk(stateMutex); state.scanned=true; state.scanError=false; FinishScan(); state.registryInfo=ReadRegistryHotkeys(); }
                     DestroyWindow(g_hiddenWnd); g_hiddenWnd=nullptr;
                 }).detach();
             }).build();
@@ -904,9 +1022,15 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             .radius(10.0f).border(1.0f, state.monitoring?p.accent:p.border)
             .onClick([] {
                 std::lock_guard<std::mutex> lk(stateMutex);
-                if(state.monitoring){StopMonitor();state.monitoring=false;state.statusText="监控已停止。";}
-                else{if(StartMonitor()){state.monitoring=true;state.statusText="监控中。按下热键检测进程归属。";state.events.clear();}
-                else state.statusText="监控启动失败 (需要管理员权限?)";}
+                if(state.monitoring){StopMonitor();state.monitoring=false;state.statusText="监控已停止。";state.statusType="info";}
+                else{
+                    if(StartMonitor()){
+                        state.monitoring=true;state.statusText="监控中。按下热键检测进程归属。";state.statusType="info";state.events.clear();
+                    } else {
+                        state.statusText=state.monitorError?state.monitorErrorMsg:"监控启动失败 (需要管理员权限?)";
+                        state.statusType="error";
+                    }
+                }
             }).build();
         ui.text("mon.label").x(mx).y(ty+8).size(168,bh)
             .text(state.monitoring?"停止监控":"开始监控").fontSize(19.0f).lineHeight(22.0f)
@@ -959,6 +1083,26 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             // ====== Home ======
             label(ui, "hm.title", ctnX+24, ciy+20, cxW-48, 44, "全局热键检测器", 36.0f, p.text);
             label(ui, "hm.sub", ctnX+24, ciy+70, cxW-48, 28, "检测系统中被占用的全局快捷键，识别进程归属", 18.0f, p.muted);
+
+            // Warning/error banners
+            float bannerY = ciy + 105;
+            if (!state.isAdmin) {
+                label(ui, "hm.warn.admin", ctnX+24, bannerY, cxW-48, 22,
+                    "\xe2\x9a\xa0 未以管理员运行 — 键盘钩子可能受限，部分进程识别功能不可用", 14.0f,
+                    {0.95f, 0.75f, 0.18f, 1.0f});
+                bannerY += 26;
+            }
+            if (state.scanError) {
+                label(ui, "hm.err.scan", ctnX+24, bannerY, cxW-48, 22,
+                    "扫描失败: " + state.scanErrorMsg, 14.0f, {0.95f, 0.28f, 0.30f, 1.0f});
+                bannerY += 26;
+            }
+            if (state.monitorError) {
+                label(ui, "hm.err.mon", ctnX+24, bannerY, cxW-48, 22,
+                    "监控失败: " + state.monitorErrorMsg, 14.0f, {0.95f, 0.28f, 0.30f, 1.0f});
+                bannerY += 26;
+            }
+
             char buf[256];
             if (state.scanned) {
                 snprintf(buf, 256, "已扫描到 %zu 个被占用的热键", state.occupied.size());
@@ -1077,7 +1221,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 ui.rect("st.dark.btn").x(ctnX+cxW-120).y(sy+2).size(80,28)
                     .states(dm?p.accent:p.surface,p.surfaceHover,p.surfacePressed)
                     .radius(14).border(1,dm?eui::Color{0,0,0,0}:p.border)
-                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.darkMode=!state.darkMode;}).build();
+                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.darkMode=!state.darkMode;SaveTheme();}).build();
                 ui.text("st.dark.t").x(ctnX+cxW-120).y(sy+2).size(80,28)
                     .text(dm?"ON":"OFF").fontSize(16).lineHeight(18)
                     .color(dm?p.accentText:p.text)
@@ -1091,7 +1235,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 ui.rect("st.tray.btn").x(ctnX+cxW-120).y(sy+2).size(80,28)
                     .states(tr?p.accent:p.surface,p.surfaceHover,p.surfacePressed)
                     .radius(14).border(1,tr?eui::Color{0,0,0,0}:p.border)
-                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.minimizeToTray=!state.minimizeToTray;}).build();
+                    .onClick([]{std::lock_guard<std::mutex> lk(stateMutex);state.minimizeToTray=!state.minimizeToTray;SaveTheme();}).build();
                 ui.text("st.tray.t").x(ctnX+cxW-120).y(sy+2).size(80,28)
                     .text(tr?"ON":"OFF").fontSize(16).lineHeight(18)
                     .color(tr?p.accentText:p.text)
@@ -1099,7 +1243,26 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
                 label(ui,"st.tray.lbl",ctnX+20,sy,cxW-200,30,"最小化到系统托盘",18.0f,p.text);
                 sy+=46;
             }
-            sy+=10;
+            sy+=6;
+            // Accent color picker
+            label(ui,"st.accent.lbl",ctnX+20,sy,cxW-40,26,"强调色",18.0f,p.text);
+            sy+=32;
+            int curPreset = state.darkMode ? state.accentPresetDark : state.accentPresetLight;
+            for (int pi = 0; pi < kAccentPresetCount; pi++) {
+                bool sel = curPreset == pi;
+                float cx2 = ctnX + 24 + (pi % 4) * 104;
+                float cy2 = sy + (pi / 4) * 34;
+                ui.rect("st.color."+std::to_string(pi)).x(cx2).y(cy2).size(88,28)
+                    .states(sel?kAccentPresets[pi].darkAccent:p.surface, p.surfaceHover, p.surfacePressed)
+                    .radius(sel?14:8).border(sel?0.0f:1.0f, sel?eui::Color{0,0,0,0}:p.border)
+                    .onClick([pi]{std::lock_guard<std::mutex> lk(stateMutex);
+                        if(state.darkMode)state.accentPresetDark=pi;else state.accentPresetLight=pi;SaveTheme();}).build();
+                ui.text("st.color.t."+std::to_string(pi)).x(cx2).y(cy2).size(88,28)
+                    .text(kAccentPresets[pi].name).fontSize(14).lineHeight(16)
+                    .color(sel?eui::Color{0.94f,0.96f,0.99f,1.0f}:p.text)
+                    .horizontalAlign(eui::HorizontalAlign::Center).verticalAlign(eui::VerticalAlign::Center).build();
+            }
+            sy += 64;
 
             label(ui,"st.sponsor",ctnX+20,sy,cxW-40,28,"\xe2\x9d\xa4 支持开发",18.0f,p.text);
             sy+=32;
