@@ -920,8 +920,21 @@ static void LoadTheme() {
 
 void compose(eui::Ui& ui, const eui::Screen& screen) {
     static bool firstFrame = true;
+    // Single-instance check via named mutex
+    static HANDLE hMutex = nullptr;
     if (firstFrame) {
         firstFrame = false;
+        hMutex = CreateMutexW(nullptr, TRUE, L"HotKeySight_SingleInstance");
+        if (hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+            // Another instance is running — bring it to front and exit
+            HWND existing = FindWindowW(nullptr, L"全局热键检测器");
+            if (existing) {
+                ShowWindow(existing, SW_RESTORE);
+                SetForegroundWindow(existing);
+            }
+            CloseHandle(hMutex);
+            exit(0);
+        }
         LoadTheme();
         // Admin check
         BOOL isAdmin = FALSE;
