@@ -41,7 +41,7 @@ LRESULT CALLBACK HiddenWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 }
 
 void CreateHiddenWindow() {
-    const wchar_t CLASS_NAME[] = L"HotkeyDetectorGUI";
+    const wchar_t CLASS_NAME[] = L"HotKeySightGUI";
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = HiddenWndProc;
@@ -567,7 +567,7 @@ static bool LoadCachedResults() {
             if (mline[0] == '#') continue;
             if (mline[0] == ' ' && mline[1] == ' ' && mline[2] == '[') {
                 // Process header: "  [procName]"
-                currentProc = std::string(mline + 3);
+                currentProc = NormalizeProcName(std::string(mline + 3));
                 if (!currentProc.empty() && currentProc.back() == ']')
                     currentProc.pop_back();
             } else if (mline[0] == ' ' && mline[1] == ' ' && mline[2] == ' ' && mline[3] == ' ') {
@@ -909,7 +909,7 @@ namespace app {
 
 const DslAppConfig& dslAppConfig() {
     static DslAppConfig config = DslAppConfig{}
-        .title("全局热键检测器")
+        .title("HotKeySight")
         .pageId("hotkey")
         .clearColor(palette().bg)
         .windowSize(1440, 960)
@@ -970,7 +970,7 @@ static void InitTray() {
     wcscat(iconPath, L"assets\\icon.ico");
     g_nid.hIcon = (HICON)LoadImageW(nullptr, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
     if (!g_nid.hIcon) g_nid.hIcon = LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
-    wcscpy(g_nid.szTip, L"全局热键检测器");
+    wcscpy(g_nid.szTip, L"HotKeySight");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
     g_trayReady = true;
 }
@@ -1147,7 +1147,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
         hMutex = CreateMutexW(nullptr, TRUE, L"HotKeySight_SingleInstance");
         if (hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
             // Another instance is running — bring it to front and exit
-            HWND existing = FindWindowW(nullptr, L"全局热键检测器");
+            HWND existing = FindWindowW(nullptr, L"HotKeySight");
             if (existing) {
                 ShowWindow(existing, SW_RESTORE);
                 SetForegroundWindow(existing);
@@ -1189,7 +1189,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
 
         // === Top bar ===
         float ty = 12.0f;
-        label(ui, "title", cx, ty, 400, 44, "全局热键检测器", 36.0f, p.text);
+        label(ui, "title", cx, ty, 400, 44, "HotKeySight", 36.0f, p.text);
         eui::Color statusColor = p.muted;
         if (state.statusType == "warn") statusColor = {0.95f, 0.75f, 0.18f, 1.0f};
         else if (state.statusType == "error") statusColor = {0.95f, 0.28f, 0.30f, 1.0f};
@@ -1315,7 +1315,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
 
         if (state.activeTab == 0) {
             // ====== Home ======
-            label(ui, "hm.title", ctnX+24, ciy+20, cxW-48, 44, "全局热键检测器", 36.0f, p.text);
+            label(ui, "hm.title", ctnX+24, ciy+20, cxW-48, 44, "HotKeySight", 36.0f, p.text);
             label(ui, "hm.sub", ctnX+24, ciy+70, cxW-48, 28, "检测系统中被占用的全局快捷键，识别进程归属", 18.0f, p.muted);
 
             // Warning/error banners
@@ -1608,7 +1608,7 @@ void compose(eui::Ui& ui, const eui::Screen& screen) {
             label(ui,"ab.title",ctnX+20,ciy+4,cxW-40,32,"关于",22.0f,p.text);
             float ay=ciy+52;
 
-            label(ui,"ab.name",ctnX+20,ay,cxW-40,36,"全局热键检测器",28.0f,p.text);
+            label(ui,"ab.name",ctnX+20,ay,cxW-40,36,"HotKeySight",28.0f,p.text);
             ay+=42;
             label(ui,"ab.ver",ctnX+20,ay,cxW-40,26,"版本 1.0.0  |  Build 2026-06-19",16.0f,p.muted);
             ay+=36;
